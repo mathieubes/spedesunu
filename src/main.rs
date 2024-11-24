@@ -22,12 +22,10 @@ enum Commands {
 fn main() {
     let cli = Cli::parse();
 
-    match cli.command {
-        Some(Commands::All) => {
-            todo!("Add project detection with the configured package name constant.")
-        },
+    let _result = match cli.command {
+        Some(Commands::All) => scan_project_deps(NodeProject::new()),
         Some(Commands::NodeJS) => scan_project_deps(NodeProject::new()),
         Some(Commands::Rust) => scan_project_deps(RustProject::new()),
-        None => {}
-    }
+        None => Err("Command doesn't exists".to_string()),
+    };
 }

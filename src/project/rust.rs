@@ -14,9 +14,7 @@ pub struct RustProject {
 
 impl RustProject {
     pub fn new() -> Self {
-        Self {
-            deps: Vec::new()
-        }
+        Self { deps: Vec::new() }
     }
 }
 

@@ -17,9 +17,7 @@ pub struct NodeProject {
 
 impl NodeProject {
     pub fn new() -> Self {
-        Self {
-            deps: Vec::new()
-        }
+        Self { deps: Vec::new() }
     }
 }
 

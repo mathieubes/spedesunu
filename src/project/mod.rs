@@ -17,48 +17,57 @@ pub trait Project {
     fn deps(&self) -> &Vec<String>;
 }
 
-pub fn scan_project_deps<T: Project>(mut project: T) {
-    // TODO improve error managment
-    let deps_count = project.parse_deps(&read_file_at_path(T::DEPS_FILE).unwrap());
-    println!("{deps_count} packages found in current project.");
-    let mut used_deps = HashSet::new();
+pub struct ScanResult {
+    pub deps_count: usize,
+    pub scanned_file_count: usize,
 
-    let mut scanned_file_count = 0usize;
+    pub unused_deps: HashSet<String>,
+}
+
+impl ScanResult {
+    fn new() -> Self {
+        Self {
+            deps_count: 0,
+            scanned_file_count: 0,
+
+            unused_deps: HashSet::new(),
+        }
+    }
+
+    fn print_result() { 
+        todo!("Print the result here");
+    }
+}
+
+pub fn scan_project_deps<T: Project>(mut project: T) -> Result<ScanResult, String> {
+    let mut scan_result = ScanResult::new();
+
+    let deps_file_content = read_file_at_path(T::DEPS_FILE)?;
+    scan_result.deps_count = project.parse_deps(&deps_file_content);
+    println!(
+        "{} dependencies found in current project.",
+        scan_result.deps_count
+    );
+
+    let mut used_deps = HashSet::new();
     for entry in WalkDir::new(".") {
         let entry = entry.unwrap();
         if entry.path().is_dir() || !should_scan_file::<T>(entry.path().to_str().unwrap()) {
             continue;
         }
+        scan_result.scanned_file_count += 1;
 
-        scanned_file_count += 1;
+        let file_content = read_file_at_path(entry.path().to_str().unwrap()).unwrap(); // 😢
 
-        let buf = read_file_at_path(entry.path().to_str().unwrap()).unwrap();
-        let mut used_deps_in_file = Vec::new();
-
+        let mut used_deps_in_file = HashSet::new();
         for dep_name in project.deps().iter() {
-            if string_exists_in_multiline_text(dep_name, &buf) {
-                used_deps_in_file.push(dep_name);
+            if string_exists_in_multiline_text(dep_name, &file_content) {
+                used_deps_in_file.insert(dep_name);
             }
+
         }
 
-        let total_unused_deps_count = deps_count - used_deps.len();
-
-        let print_str = format!(
-            "==============================
-> File : {}
-> Deps found : {:?}
-> Unused deps count : {}
-==============================",
-            entry.path().display(),
-            used_deps_in_file,
-            total_unused_deps_count
-        );
-
-        if used_deps_in_file.is_empty() {
-            println!("{}", print_str.red());
-        } else {
-            println!("{}", print_str);
-        }
+        print_current_file_result(&entry.path().display().to_string(), &used_deps_in_file, scan_result.deps_count - used_deps.len());
 
         for dep_name in used_deps_in_file.into_iter() {
             used_deps.insert(dep_name);
@@ -66,13 +75,12 @@ pub fn scan_project_deps<T: Project>(mut project: T) {
     }
 
     for dep_name in project.deps().iter() {
-        if !used_deps.contains(dep_name) {
-            println!("Not used : {}", dep_name.red());
+        if !used_deps.contains(&dep_name) {
+            scan_result.unused_deps.insert(dep_name.to_string());
         }
     }
 
-    println!("{} files scanned", scanned_file_count);
-    println!("{} unused deps", deps_count - used_deps.len());
+    Ok(scan_result)
 }
 
 fn should_scan_file<T: Project>(file_path: &str) -> bool {
@@ -95,9 +103,30 @@ fn should_scan_file<T: Project>(file_path: &str) -> bool {
     false
 }
 
+fn print_current_file_result(
+    file: &str,
+    used_deps_in_file: &HashSet<&String>,
+    remaining_unused_deps_count: usize,
+) {
+    let print_str = format!(
+        "==============================
+> File : {}
+> Deps found in this file : {:?}
+> Remaining unused deps count : {}
+==============================",
+        file, used_deps_in_file, remaining_unused_deps_count
+    );
+
+    if used_deps_in_file.is_empty() {
+        println!("{}", print_str.red());
+    } else {
+        println!("{}", print_str);
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{should_scan_file, node_js::NodeProject, rust::RustProject};
+    use super::{node_js::NodeProject, rust::RustProject, should_scan_file};
 
     #[test]
     fn node_js_should_scan_file() {
@@ -111,7 +140,10 @@ mod tests {
         assert_eq!(should_scan_file::<NodeProject>("foo.rs"), false);
         assert_eq!(should_scan_file::<NodeProject>("foo.jssx"), false);
         assert_eq!(should_scan_file::<NodeProject>("package.json"), false);
-        assert_eq!(should_scan_file::<NodeProject>("foo/node_modules/foo.ts"), false);
+        assert_eq!(
+            should_scan_file::<NodeProject>("foo/node_modules/foo.ts"),
+            false
+        );
     }
 
     #[test]
