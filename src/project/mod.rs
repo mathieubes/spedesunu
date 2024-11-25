@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, time::SystemTime};
 
 use colored::Colorize;
 use walkdir::WalkDir;
@@ -22,6 +22,8 @@ pub struct ScanResult {
     pub scanned_file_count: usize,
 
     pub unused_deps: HashSet<String>,
+
+    pub start_time: SystemTime,
 }
 
 impl ScanResult {
@@ -31,11 +33,13 @@ impl ScanResult {
             scanned_file_count: 0,
 
             unused_deps: HashSet::new(),
+
+            start_time: SystemTime::now(),
         }
     }
 
-    fn print_result() { 
-        todo!("Print the result here");
+    pub fn print_result(&self) {
+        println!("Unused dependencies : {:?}\nElapsed time : {:?}\nDependency count : {}\nScanned file count : {}", self.unused_deps, self.start_time.elapsed().unwrap(), self.deps_count, self.scanned_file_count);
     }
 }
 
@@ -52,9 +56,12 @@ pub fn scan_project_deps<T: Project>(mut project: T) -> Result<ScanResult, Strin
     let mut used_deps = HashSet::new();
     for entry in WalkDir::new(".") {
         let entry = entry.unwrap();
+
+        // TODO this if block should be a Walkdir filter I guess...
         if entry.path().is_dir() || !should_scan_file::<T>(entry.path().to_str().unwrap()) {
             continue;
         }
+
         scan_result.scanned_file_count += 1;
 
         let file_content = read_file_at_path(entry.path().to_str().unwrap()).unwrap(); // 😢
@@ -64,10 +71,13 @@ pub fn scan_project_deps<T: Project>(mut project: T) -> Result<ScanResult, Strin
             if string_exists_in_multiline_text(dep_name, &file_content) {
                 used_deps_in_file.insert(dep_name);
             }
-
         }
 
-        print_current_file_result(&entry.path().display().to_string(), &used_deps_in_file, scan_result.deps_count - used_deps.len());
+        print_current_file_result(
+            &entry.path().display().to_string(),
+            &used_deps_in_file,
+            scan_result.deps_count - used_deps.len(),
+        );
 
         for dep_name in used_deps_in_file.into_iter() {
             used_deps.insert(dep_name);

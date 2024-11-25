@@ -22,10 +22,14 @@ enum Commands {
 fn main() {
     let cli = Cli::parse();
 
-    let _result = match cli.command {
+    let result = match cli.command {
         Some(Commands::All) => scan_project_deps(NodeProject::new()),
         Some(Commands::NodeJS) => scan_project_deps(NodeProject::new()),
         Some(Commands::Rust) => scan_project_deps(RustProject::new()),
         None => Err("Command doesn't exists".to_string()),
     };
+
+    if let Ok(r) = result {
+        r.print_result();
+    }
 }
